@@ -59,6 +59,7 @@ and turn it all on.
 
   1. Open a terminal Window and type the configured alias from above "buspirate"
   2. This will open the buspirate interactive menu. To configure it type:
+
     1. Type 'm' to set the correct mode
     2. Type '4' to set I2C
     3. Type '3' to select '~100KHz'
