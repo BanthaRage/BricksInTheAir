@@ -59,14 +59,13 @@ and turn it all on.
 
   1. Open a terminal Window and type the configured alias from above "buspirate"
   2. This will open the buspirate interactive menu. To configure it type:
-
-    1. Type 'm' to set the correct mode
-    2. Type '4' to set I2C
-    3. Type '3' to select '~100KHz'
-    4. Type 'W' to turn ON the 5V power rails
-      - Press the momentary power switch button to power the Bricks in the Air
+      1. Type 'm' to set the correct mode
+      2. Type '4' to set I2C
+      3. Type '3' to select '~100KHz'
+      4. Type 'W' to turn ON the 5V power rails
+          - Press the momentary power switch button to power the Bricks in the Air
       Board. Verify by ensuring the LEDs on that board are illuminated.
-    5. Type '(1)' to run the 7bit address search macro. This will list all the
+      5. Type '(1)' to run the 7bit address search macro. This will list all the
     connected I2C devices and you should see 3 available. Now you're all set
 
 After somone completes a challenge it's often useful and easiest to "reset" the
