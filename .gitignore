@@ -9,3 +9,6 @@ config.yml
 
 # ignore the freecad stash
 *.FCStd1
+
+# ignore Mac .ds_store
+*.DS_Store
