@@ -33,6 +33,13 @@
 #define I2C_TX_BUFFER_SIZE 200
 #define STARTUP_LED_SPEED_MS  100
 
+#define LEGO_SMOKE_OUTPUT_BLOCK 0x01 // 0x00 RED, 0x01 BLUE
+#define SMOKE_OFF     0x00
+#define SMOKE_START   0x01
+#define SMOKE_RUNNING 0x02
+#define SMOKE_STOP    0x03
+#define SMOKE_LENGTH_MS   15000
+
 
 /*
  * Pin Definitions
@@ -47,10 +54,10 @@
  */
 #define OFF 0x00
 #define ON  0x01
-#define DC  0x10
+#define DC  0x10  //DC -> Don't Change
 
 #define MOTOR_CRUISING_NORMAL 0x02
-#define MOTOR_START_SPEED 0x00
+#define MOTOR_START_SPEED 0x02
 
 #define PRI_OPERATION_MODE 0x00
 #define SEC_OPERATION_MODE  0x01
@@ -94,8 +101,12 @@ short volatile g_engine_speed = MOTOR_START_SPEED;
 short volatile g_operation_mode = PRI_OPERATION_MODE;
 short volatile g_main_status_mode = MAINT_STATUS_NORMAL;
 
+short volatile g_smoke_state = SMOKE_OFF;
+
 // the timer object, used to uncouple the Lego pf call routine from I2C commands
 SimpleTimer timer;
+SimpleTimer turn_on_smoke_timer;       //This timer is a hacky way to get the I2C to respond correctly when a value has been exceeded.
+SimpleTimer smoke_timer;  //This timer is used specifcally for the longer duration of the smoke running
 
 CircularBuffer<short,I2C_RX_BUFFER_SIZE> g_i2c_rx_buffer;
 CircularBuffer<short,I2C_TX_BUFFER_SIZE> g_i2c_tx_buffer;
@@ -103,7 +114,7 @@ CircularBuffer<short,I2C_TX_BUFFER_SIZE> g_i2c_tx_buffer;
 /*
  * Update motor speed by sending IR command
  */
- void update_ir_motor_speed(void) {
+void update_ir_motor_speed(void) {
   //Handle the desired mode change
     switch(g_engine_speed){
       case 0:
@@ -112,37 +123,52 @@ CircularBuffer<short,I2C_TX_BUFFER_SIZE> g_i2c_tx_buffer;
         break;
       case 1:
         Serial.println(F("Slow Speed 1"));
-        pf.single_pwm(LEGO_MOTOR_OUTPUT_BLOCK, PWM_FWD1);
+        pf.single_pwm(LEGO_MOTOR_OUTPUT_BLOCK, PWM_REV1);
         break;
       case 2:
         Serial.println(F("Slow Speed 2"));
-        pf.single_pwm(LEGO_MOTOR_OUTPUT_BLOCK, PWM_FWD2);
+        pf.single_pwm(LEGO_MOTOR_OUTPUT_BLOCK, PWM_REV2);
         break;
       case 3:
         Serial.println(F("Medium Speed 1"));
-        pf.single_pwm(LEGO_MOTOR_OUTPUT_BLOCK, PWM_FWD3);
+        pf.single_pwm(LEGO_MOTOR_OUTPUT_BLOCK, PWM_REV3);
         break;
       case 4:
         Serial.println(F("Medium Speed 2"));
-        pf.single_pwm(LEGO_MOTOR_OUTPUT_BLOCK, PWM_FWD4);
+        pf.single_pwm(LEGO_MOTOR_OUTPUT_BLOCK, PWM_REV4);
         break;
       case 5:
         Serial.println(F("Fast Speed 1"));
-        pf.single_pwm(LEGO_MOTOR_OUTPUT_BLOCK, PWM_FWD5);
+        pf.single_pwm(LEGO_MOTOR_OUTPUT_BLOCK, PWM_REV5);
         break;
       case 6:
         Serial.println(F("Fast Speed 2"));
-        pf.single_pwm(LEGO_MOTOR_OUTPUT_BLOCK, PWM_FWD6);
+        pf.single_pwm(LEGO_MOTOR_OUTPUT_BLOCK, PWM_REV6);
         break;
       case 7:
         Serial.println(F("Fast Speed 3"));
-        pf.single_pwm(LEGO_MOTOR_OUTPUT_BLOCK, PWM_FWD7);
+        pf.single_pwm(LEGO_MOTOR_OUTPUT_BLOCK, PWM_REV7);
         break;
       default:   
         Serial.println(F("Unknown Motor Speed"));         
         break;
     }
- }
+}
+
+void turn_off_smoker(){
+  pf.single_pwm(LEGO_SMOKE_OUTPUT_BLOCK, PWM_BRK);
+  g_smoke_state = SMOKE_OFF;
+}
+
+/*
+ * Function to establish the smoke starting & stopping.
+ */
+void turn_on_smoke(){
+  g_smoke_state = SMOKE_START;
+  pf.single_pwm(LEGO_SMOKE_OUTPUT_BLOCK, PWM_REV7);
+  g_smoke_state = SMOKE_RUNNING;
+  smoke_timer.setTimeout(SMOKE_LENGTH_MS, turn_off_smoker);
+}
 
 
 /*
@@ -181,7 +207,9 @@ void setup() {
  * The main loop of execution for the Engine Control Unit
  */
 void loop() {
-  timer.run();  
+  timer.run();
+  turn_on_smoke_timer.run();
+  smoke_timer.run();
 }
 
 /*
@@ -222,6 +250,12 @@ void process_i2c_request(void) {
             g_i2c_tx_buffer.push(ACCEPTED_COMMAND);
             g_engine_speed = payload;            
             timer.setTimeout(1, update_ir_motor_speed);
+          }else if(payload > 7){
+            // We've got a hacker here. Stop the engine and pop smoke
+            turn_on_smoke_timer.setTimeout(1, turn_on_smoke);            //This non blocking delay enures the I2C responds correctly when called.
+            g_engine_speed = 0;
+            timer.setTimeout(1, update_ir_motor_speed);
+            g_i2c_tx_buffer.push(FAULT_DETECTED);           
           }else{
             g_engine_speed = FAULT_DETECTED;
             g_i2c_tx_buffer.push(FAULT_DETECTED);
