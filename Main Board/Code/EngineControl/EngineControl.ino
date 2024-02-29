@@ -48,6 +48,7 @@
 #define YELLOW_LED 5
 #define RED_LED 6
 #define LEGO_PF_PIN 10
+//Make an entry here for Warning Light -DDF
 
 /*
  * State Machine Definitions
@@ -248,11 +249,15 @@ void process_i2c_request(void) {
       case SET_ENGINE_SPEED:
         // Need to expand logic to speicify when the engine can be changed
         if(g_main_status_mode == MAINT_STATUS_DEBUG){
-          if(payload >= 0 && payload <= 7){
+          if(payload >= 0 && payload <= 5){
             g_i2c_tx_buffer.push(ACCEPTED_COMMAND);
             g_engine_speed = payload;            
             timer.setTimeout(1, update_ir_motor_speed);
-          }else if(payload > 7){
+          }else if(payload = 6){  //Make more logic here to make a warning light flash -DDF
+            g_engine_speed = 6;
+            timer.setTimeout(1, update_ir_motor_speed);
+
+          }else if(payload > 6){
             // We've got a hacker here. Stop the engine and pop smoke
             turn_on_smoke_timer.setTimeout(1, turn_on_smoke);            //This non blocking delay enures the I2C responds correctly when called.
             g_engine_speed = 7;
