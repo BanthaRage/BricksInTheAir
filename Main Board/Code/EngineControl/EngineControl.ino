@@ -101,7 +101,7 @@ short volatile g_engine_speed = MOTOR_START_SPEED;
 short volatile g_operation_mode = PRI_OPERATION_MODE;
 short volatile g_main_status_mode = MAINT_STATUS_NORMAL;
 
-short volatile g_smoke_state = SMOKE_OFF;
+short volatile g_smoke_state = SMOKE_OFF; 
 
 // the timer object, used to uncouple the Lego pf call routine from I2C commands
 SimpleTimer timer;
@@ -186,6 +186,8 @@ void setup() {
   
   Serial.begin(SERIAL_BAUD);    // start serial for output debugging
   Serial.println(F("Main Engine Control Unit is online, ready for tasking"));
+
+  turn_off_smoker(); //This ensures that the smoke machine is off - DDF
   
   for (i=0; i<5; i++) {
     set_led(ON, OFF, OFF);
@@ -244,7 +246,7 @@ void process_i2c_request(void) {
         break;
       
       case SET_ENGINE_SPEED:
-        // Need to expand logic to speicify when the enigne can be changed
+        // Need to expand logic to speicify when the engine can be changed
         if(g_main_status_mode == MAINT_STATUS_DEBUG){
           if(payload >= 0 && payload <= 7){
             g_i2c_tx_buffer.push(ACCEPTED_COMMAND);
@@ -253,6 +255,9 @@ void process_i2c_request(void) {
           }else if(payload > 7){
             // We've got a hacker here. Stop the engine and pop smoke
             turn_on_smoke_timer.setTimeout(1, turn_on_smoke);            //This non blocking delay enures the I2C responds correctly when called.
+            g_engine_speed = 7;
+            timer.setTimeout(1, update_ir_motor_speed);
+            delay(3000);  //Changed this so the that the engines speed up and start smoking giving it more of a shock factor - DDF
             g_engine_speed = 0;
             timer.setTimeout(1, update_ir_motor_speed);
             g_i2c_tx_buffer.push(FAULT_DETECTED);           
@@ -260,9 +265,16 @@ void process_i2c_request(void) {
             g_engine_speed = FAULT_DETECTED;
             g_i2c_tx_buffer.push(FAULT_DETECTED);
           }
-        }else if(payload >= 2 && payload <= 4){
+        }else if(g_main_status_mode = SEC_OPERATION_MODE){  //Added more logic to the set engine speed to make it more difficult to maintain the speed until in Secondary Mode - DDF
+          g_engine_speed = payload;            
+          g_i2c_tx_buffer.push(ACCEPTED_COMMAND);
+          timer.setTimeout(1, update_ir_motor_speed);
+        }else if(payload >= 1 && payload <= 3){ //Changed this to a lower speed so the affect is more visable - DDF
             g_engine_speed = payload;            
             g_i2c_tx_buffer.push(ACCEPTED_COMMAND);
+            timer.setTimeout(1, update_ir_motor_speed);
+            delay(5000);  //Made this change to show that the pilot is still in control until the mode is switched to Secondary Mode - DDF
+            g_engine_speed = 2;
             timer.setTimeout(1, update_ir_motor_speed);
         }else{
             g_i2c_tx_buffer.push(REJECTED_COMMAND);
@@ -279,7 +291,7 @@ void process_i2c_request(void) {
           set_led(DC, ON, DC);
           g_i2c_tx_buffer.push(ACCEPTED_COMMAND);
         }else{
-          g_i2c_tx_buffer.push(UNKNOWN_COMMAND);
+          g_i2c_tx_buffer.push(REJECTED_COMMAND);  //This change makes it more uniform with responses - DDF
         }
         break;
       
@@ -302,7 +314,7 @@ void process_i2c_request(void) {
         break;        
       
       default:
-        g_i2c_tx_buffer.push(UNKNOWN_COMMAND);
+        g_i2c_tx_buffer.push(REJECTED_COMMAND);  //This change makes it more uniform with responses - DDF
         break;
     }
   }else if (command != 0xff){
@@ -335,6 +347,7 @@ void process_i2c_request(void) {
         g_main_status_mode = MAINT_STATUS_NORMAL;
         set_led(ON, OFF, OFF);
         timer.setTimeout(1, update_ir_motor_speed);
+        turn_off_smoker(); //Added to make sure the smoke machine doesn't get stuck in the "ON" position - DDF
         break;
       
       default:
